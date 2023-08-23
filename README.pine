@@ -1,1 +1,200 @@
-#
+
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © wugamlo
+
+//@version=4
+study("MACD", overlay=false)
+
+// Standard MACD Input
+src             = input(close, title="Source")
+fast_length     = input(title = "Fast Length", type=input.integer, defval = 12)
+slow_length     = input(title = "Slow Length", type=input.integer, defval = 26)
+signal_length   = input(title = "Signal Smoothing", type=input.integer, minval = 1, maxval = 50, defval = 9)
+
+// Color Definitions
+strong_green  = color.new(#26A69A,00)    // Strong Green
+light_green   = color.new(#B2DFDB, 00)    // Light Green
+strong_red    = color.new(#FF5252,00)    // Strong Rer
+light_red     = color.new(#FFCDD2,00)    // Light Red
+
+// Standard MACD Calculation
+fast_ma         = ema(src, fast_length)
+slow_ma         = ema(src, slow_length)
+macd            = fast_ma - slow_ma
+signal          = ema(macd, signal_length)
+hist            = macd - signal
+histcolor       = (hist >= 0 ? (hist[1] < hist ? strong_green : light_green) : (hist[1] < hist ? light_red : strong_red) )
+
+// Standard MACD Plotting
+hline(0,     title = "0 line",    color = color.gray,    linestyle = hline.style_dotted)
+plot(hist,   title = "Histogram", color = histcolor,     style = plot.style_columns, transp = 0)
+plot(macd,   title = "MACD",      color = #2962FF, linewidth = 2, transp = 0)
+plot(signal, title = "Signal",    color = #FF6D00,  linewidth = 2, transp = 0)
+
+// MACD Divergence Input
+showdiv         = input(title = " Show Divergences ? ", defval = true)
+divergence      = input(title = "Divergence on Histogram or MACD Line?", defval = 'Histogram', options = ['Histogram', 'MACD'])
+divsrc          = input(title = "Use Price Wicks or Bodies?", defval = 'Wicks', options = ['Wicks', 'Bodies'])
+lbR             = input(title = "Pivot Lookback Right", defval = 5)
+lbL             = input(title = "Pivot Lookback Left",  defval = 4)
+rangeUpper      = input(title = "Max of Lookback Range", defval = 60)
+rangeLower      = input(title = "Min of Lookback Range", defval = 5)
+plotBull        = input(title = "Plot Bullish", defval = true)
+plotHiddenBull  = input(title = "Plot Hidden Bullish", defval = true)
+plotBear        = input(title = "Plot Bearish", defval = true)
+plotHiddenBear  = input(title = "Plot Hidden Bearish", defval = true)
+
+osc = divergence == "Histogram"? hist : macd
+
+// Divergence Plot colors
+bearColor       = #DE071C
+bullColor       = #0CAB07
+hiddenBullColor = #8BDE7A
+hiddenBearColor = #DEA7A6
+textColor       = color.white
+noneColor       = color.new(#ffffff, 100)
+
+
+plFound = na(pivotlow (osc, lbL, lbR)) ? false : true
+phFound = na(pivothigh(osc, lbL, lbR)) ? false : true
+
+_inRange(cond) =>
+    bars = barssince(cond == true)
+    rangeLower <= bars and bars <= rangeUpper
+
+srch = divsrc == 'Wicks' ? high : max(close, open)   
+srcl = divsrc == 'Wicks' ? low  : min(close, open)
+
+//------------------------------------------------------------------------------
+// Regular Bullish
+
+// Osc: Higher Low
+oscHL = osc[lbR] > valuewhen(plFound, osc[lbR], 1) and _inRange(plFound[1])
+
+// Price: Lower Low
+//priceLL = low[lbR] < valuewhen(plFound, low[lbR], 1)
+priceLL = srcl[lbR] < valuewhen(plFound, srcl[lbR], 1)
+
+
+bullCond = plotBull and priceLL and oscHL and plFound and showdiv
+
+plot(
+	 plFound ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Regular Bullish",
+	 linewidth=1,
+	 color=(bullCond ? bullColor : noneColor),
+	 transp=0
+	 )
+
+plotshape(
+	 bullCond ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Regular Bullish Label",
+	 text=" Bull ",
+	 style=shape.labelup,
+	 location=location.absolute,
+	 color=bullColor,
+	 textcolor=textColor,
+	 transp=0
+	 )
+
+//------------------------------------------------------------------------------
+// Hidden Bullish
+
+// Osc: Lower Low
+oscLL = osc[lbR] < valuewhen(plFound, osc[lbR], 1) and _inRange(plFound[1])
+
+// Price: Higher Low
+//priceHL = low[lbR] > valuewhen(plFound, low[lbR], 1)
+priceHL = srcl[lbR] > valuewhen(plFound, srcl[lbR], 1)
+
+hiddenBullCond = plotHiddenBull and priceHL and oscLL and plFound and showdiv
+
+plot(
+	 plFound ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Hidden Bullish",
+	 linewidth=1,
+	 color=(hiddenBullCond ? hiddenBullColor : noneColor),
+	 transp=0
+	 )
+
+plotshape(
+	 hiddenBullCond ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Hidden Bullish Label",
+	 text=" H Bull ",
+	 style=shape.labelup,
+	 location=location.absolute,
+	 color=bullColor,
+	 textcolor=textColor,
+	 transp=0
+	 )
+
+//------------------------------------------------------------------------------
+// Regular Bearish
+
+// Osc: Lower High
+oscLH = osc[lbR] < valuewhen(phFound, osc[lbR], 1) and _inRange(phFound[1])
+
+// Price: Higher High
+//priceHH = high[lbR] > valuewhen(phFound, high[lbR], 1)
+priceHH = srch[lbR] > valuewhen(phFound, srch[lbR], 1)
+
+bearCond = plotBear and priceHH and oscLH and phFound and showdiv
+
+plot(
+	 phFound ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Regular Bearish",
+	 linewidth=1,
+	 color=(bearCond ? bearColor : noneColor),
+	 transp=0
+	 )
+
+plotshape(
+	 bearCond ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Regular Bearish Label",
+	 text=" Bear ",
+	 style=shape.labeldown,
+	 location=location.absolute,
+	 color=bearColor,
+	 textcolor=textColor,
+	 transp=0
+	 )
+
+//------------------------------------------------------------------------------
+// Hidden Bearish
+
+// Osc: Higher High
+oscHH = osc[lbR] > valuewhen(phFound, osc[lbR], 1) and _inRange(phFound[1])
+
+// Price: Lower High
+//priceLH = high[lbR] < valuewhen(phFound, high[lbR], 1)
+priceLH = srch[lbR] < valuewhen(phFound, srch[lbR], 1)
+
+hiddenBearCond = plotHiddenBear and priceLH and oscHH and phFound and showdiv
+
+plot(
+	 phFound ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Hidden Bearish",
+	 linewidth=1,
+	 color=(hiddenBearCond ? hiddenBearColor : noneColor),
+	 transp=0
+	 )
+
+plotshape(
+	 hiddenBearCond ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Hidden Bearish Label",
+	 text=" H Bear ",
+	 style=shape.labeldown,
+	 location=location.absolute,
+	 color=bearColor,
+	 textcolor=textColor,
+	 transp=0
+	 )
+alertcondition(bullCond or hiddenBullCond or bearCond or hiddenBearCond , title = "Divrgence" , message = "Divergence")
